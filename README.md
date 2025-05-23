@@ -8,7 +8,7 @@ Cranky brings together the best of both worlds:
 - The advantages of spaced repetition, provided by Anki
 - The creativity and retention benefits of visual learning, powered by symbolic scene generation
 
-![Scene Screenshot](cranky_orig.png)
+![Scene Screenshot](cranky.png)
 
 ---
 
