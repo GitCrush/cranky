@@ -54,7 +54,7 @@ Card creation can take several minutes due to server load and latency of API cal
 
 ## Important Notice on Data Privacy and Responsibility
 
-When you use Cranky, the contents of your Anki cards—including front, back, and any linked media are transmitted to a remote server for the purpose of generating symbolic memory palace scenes. As part of this process, your data may be submitted to third-party services such as OpenAI and Replicate via their respective APIs.
+When you use Cranky, the contents of your Anki cards—including front, back, and any linked media are transmitted to and stored on a remote server for the purpose of generating symbolic memory palace scenes. As part of this process, your data may be submitted to third-party services such as OpenAI and Replicate via their respective APIs.
 
 You should only select and submit cards containing content you are comfortable sharing with these external providers.
 
