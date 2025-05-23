@@ -64,3 +64,4 @@ The application provider does not operate or control these third-party services 
 
 *Cranky is designed for learners who want to visualize what they know and understand what they remember.*
 
+contact: deep_intervention@posteo.de
