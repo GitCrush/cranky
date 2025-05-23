@@ -15,9 +15,9 @@ Cranky brings together the best of both worlds:
 ## Why Cranky?
 
 
-Traditional spaced repetition systems like Anki are highly effective at helping you retain isolated information. But for many learners -especially those tackling abstract, conceptual, or complex material- repetition alone isn't enough.
+Traditional spaced repetition systems like Anki are highly effective at helping you retain isolated information. But for many learners, especially those tackling abstract, conceptual or complex material, repetition alone isn't enough.
 
-Cranky adds structure to your knowledge. It gives shape to the shapeless, turning disconnected cards into concrete spatial representations. With Cranky, you place your concepts into environments, stories, and visual metaphors that engage the deeper mechanisms of memory: association, imagery, narrative.
+Cranky adds structure to your knowledge, turning disconnected cards into  spatial representations. With Cranky, you place your concepts into environments, stories, and visual metaphors that engage the deeper mechanisms of memory: Association, imagery and narratives.
 
 Whether you're a medical student trying to retain a web of diagnoses and mechanisms, or a learner navigating difficult and theoretical material, Cranky provides a way to anchor abstract knowledge in something more tangible.
 
