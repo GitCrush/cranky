@@ -155,6 +155,12 @@ def main():
                 with open(SCENE_PATH, "r") as file:
                     layout = json.load(file)
                 session_id = layout.get("session_id")
+                
+    else: 
+        with open(SCENE_PATH, "r") as f:
+            layout = json.load(f)
+            print(f"Layout loaded from {SCENE_PATH}")
+        session_id = layout.get("session_id")    
 
     print(" Generating HTML viewer...")
     resp = call_api("/generate_viewer", json_data={"layout": layout})
