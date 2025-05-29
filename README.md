@@ -50,6 +50,12 @@ python cranky.py --stored-scene --stored-cards
 By default, Cranky generates memory palaces based on the 25 most difficult cards of the selected deck. 
 Card creation can take several minutes due to server load and latency of API calls, so please be patient. 
 
+## Prerequisites
+
+- **Anki** installed on your machine
+- **AnkiConnect** add-on installed ([Download AnkiConnect](https://ankiweb.net/shared/info/2055492159))
+- **Python 3.x** installed
+
 ---
 
 ## Important Notice on Data Privacy and Responsibility
