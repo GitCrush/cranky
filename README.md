@@ -23,6 +23,8 @@ Whether you're a medical student trying to retain a web of diagnoses and mechani
 
 Therefore it is not meant to be a replacement for your flashcards, but a experience that helps you rember difficult content. 
 
+([Szene Example generated based on the 25 most difficult "Soze Step1" Cardiology Cards](https://api.cranky.app/viewer/5e8e0ced/cranky_viewer.html))
+
 ---
 
 ## How to Use
