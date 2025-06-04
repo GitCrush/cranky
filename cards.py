@@ -36,7 +36,7 @@ def extract_media_names(html):
 
 def sanitize_filename_base64(filename):
     name, ext = os.path.splitext(filename)
-    encoded = base64.urlsafe_b64encode(name.encode()).decode()
+    encoded = base64.urlsafe_b64encode(name.encode()).decode().rstrip("=")
     return f"{encoded}{ext}"
 
 def download_media_file(filename):
