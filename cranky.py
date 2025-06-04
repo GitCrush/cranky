@@ -8,15 +8,30 @@ import argparse
 import time
 import uuid
 import threading
+import random
 from cards import get_cards
 
 os.environ['COUPON_TOKEN'] = "demo1"
-#API_BASE = "http://127.0.0.1:5000"  
-API_BASE = "https://api.cranky.app" # for production
+API_BASE = "http://127.0.0.1:5000"  
+#API_BASE = "https://api.cranky.app" # for production
 
 SCENE_PATH = "cranky_layout.json"
 CARDS_CACHE = "cards_retrieved.json"
 VIEWER_DIR = "viewer"
+
+def clean_media_folder():
+    media_dir = os.path.join(VIEWER_DIR, "media")
+    if os.path.exists(media_dir):
+        print(f"🧹 Cleaning media folder: {media_dir}")
+        for fname in os.listdir(media_dir):
+            fpath = os.path.join(media_dir, fname)
+            try:
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+                elif os.path.isdir(fpath):
+                    shutil.rmtree(fpath)
+            except Exception as e:
+                print(f"⚠️ Failed to delete {fpath}: {e}")
 
 def poll_status(session_id):
     import time
@@ -87,6 +102,7 @@ def main():
     force_refresh = not args.stored_cards
 
     if force_refresh:
+        clean_media_folder()
         regenerate = True
         print(" Checking AnkiConnect...")
         if not check_anki_connect():
@@ -104,6 +120,7 @@ def main():
     else:
         cards = get_cards(force_refresh=False)
         print(f" Loaded {len(cards)} cards from cache.")
+  
 
     if regenerate:
         theme = input(" Enter a theme for the memory palace: ").strip()
