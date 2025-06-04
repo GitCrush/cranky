@@ -1,4 +1,3 @@
-# cards.py (patched with deck + tag selector and enlarged GUI)
 import json
 import os
 import re
@@ -7,6 +6,8 @@ from PyQt6 import QtWidgets
 import sys
 import base64
 from tag_input_widget import TagInputWidget  
+import random
+from heapq import nlargest
 
 USE_MOCK_CARDS = False
 
@@ -84,7 +85,6 @@ def fetch_cards():
         layout.addWidget(deck_combo)
 
         layout.addWidget(QtWidgets.QLabel("Select Tags:"))
-
         tag_widget = TagInputWidget(tags)
         layout.addWidget(tag_widget)
 
@@ -149,7 +149,7 @@ def fetch_cards():
 
         query = " ".join(query_parts)
         print("🔍 AnkiConnect query:", query)
-        
+
         card_ids = requests.post("http://localhost:8765", json={
             "action": "findCards",
             "version": 6,
@@ -159,25 +159,42 @@ def fetch_cards():
         if not card_ids:
             raise ValueError("No cards found")
 
-        card_infos = requests.post("http://localhost:8765", json={
-            "action": "cardsInfo",
-            "version": 6,
-            "params": {"cards": card_ids}
-        }).json()["result"]
+        from heapq import nlargest
+        import random
 
-        best_cards_by_note = {}
-        for c in card_infos:
-            note_id = c["note"]
-            if note_id not in best_cards_by_note or c.get("lapses", 0) > best_cards_by_note[note_id].get("lapses", 0):
-                best_cards_by_note[note_id] = c
+        def fetch_top_cards(card_ids, key):
+            best_cards_by_note = {}
+            batch_size = 500
 
-        if selection_mode == "Most Repetitions":
-            top_cards = sorted(best_cards_by_note.values(), key=lambda c: c.get("reps", 0), reverse=True)[:25]
-        elif selection_mode == "Random":
-            import random
-            top_cards = random.sample(list(best_cards_by_note.values()), min(25, len(best_cards_by_note)))
-        else:
-            top_cards = sorted(best_cards_by_note.values(), key=lambda c: c.get("lapses", 0), reverse=True)[:25]
+            for i in range(0, len(card_ids), batch_size):
+                batch = card_ids[i:i + batch_size]
+                response = requests.post("http://localhost:8765", json={
+                    "action": "cardsInfo",
+                    "version": 6,
+                    "params": {"cards": batch}
+                }).json()["result"]
+
+                for c in response:
+                    note_id = c["note"]
+                    if note_id not in best_cards_by_note or c.get(key, 0) > best_cards_by_note[note_id].get(key, 0):
+                        best_cards_by_note[note_id] = c
+
+            return nlargest(25, best_cards_by_note.values(), key=lambda c: c.get(key, 0))
+
+        if selection_mode == "Random":
+            random_ids = random.sample(card_ids, min(25, len(card_ids)))
+            card_infos = requests.post("http://localhost:8765", json={
+                "action": "cardsInfo",
+                "version": 6,
+                "params": {"cards": random_ids}
+            }).json()["result"]
+            top_cards = card_infos
+
+        elif selection_mode == "Most Repetitions":
+            top_cards = fetch_top_cards(card_ids, "reps")
+
+        else:  # Most Lapses
+            top_cards = fetch_top_cards(card_ids, "lapses")
 
         note_ids = [c["note"] for c in top_cards]
         notes = requests.post("http://localhost:8765", json={
@@ -201,13 +218,11 @@ def fetch_cards():
             back = strip_html_tags_preserve_formatting(strip_clozes(raw_back))
 
             media_sources = set()
-            # Always include media from Text and Extra fields
             raw_text = flds.get("Text", {}).get("value", "")
             raw_extra = flds.get("Extra", {}).get("value", "")
             media_sources.update(extract_media_names(raw_text))
             media_sources.update(extract_media_names(raw_extra))
 
-            # Optionally scan all other fields for additional images
             for fname, field in flds.items():
                 if fname in ("Text", "Extra"):
                     continue
@@ -243,6 +258,7 @@ def fetch_cards():
         print(f"❌ Anki Connect Error: {e}")
         return []
 
+
 def get_cards(force_refresh=False):
     if not force_refresh and os.path.exists(OUTPUT_PATH):
         with open(OUTPUT_PATH, "r") as f:
@@ -254,6 +270,3 @@ def get_cards(force_refresh=False):
         with open(OUTPUT_PATH, "w") as f:
             json.dump(cards, f, indent=2, ensure_ascii=False)
     return cards
-
-
-
