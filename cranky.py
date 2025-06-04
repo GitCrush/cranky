@@ -12,8 +12,8 @@ import random
 from cards import get_cards
 
 os.environ['COUPON_TOKEN'] = "demo1"
-API_BASE = "http://127.0.0.1:5000"  
-#API_BASE = "https://api.cranky.app" # for production
+#API_BASE = "http://127.0.0.1:5000"  
+API_BASE = "https://api.cranky.app" # for production
 
 SCENE_PATH = "cranky_layout.json"
 CARDS_CACHE = "cards_retrieved.json"
