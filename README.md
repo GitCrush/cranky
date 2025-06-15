@@ -25,6 +25,8 @@ Therefore it is not meant to be a replacement for your flashcards, but a experie
 
 [Scene Example generated based on the 25 most difficult "Soze Step1" Cardiology Cards](https://api.cranky.app/viewer/5e8e0ced/cranky_viewer.html)
 
+[Another Example generated based on the most difficult Nephrology Cards](https://api.cranky.app/viewer/557d809a/cranky_viewer.html)
+
 ---
 
 ## How to Use
