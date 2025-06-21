@@ -21,15 +21,26 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 def strip_clozes(text):
     return re.sub(r'{{c\d+::(.*?)(::.*?)?}}', r'\1', text)
 
-def strip_html_tags_preserve_formatting(text):
-    text = re.sub(r'<li[^>]*>', '\n• ', text)
-    text = re.sub(r'</li>', '', text)
-    text = re.sub(r'</?(ul|ol)[^>]*>', '\n', text)
-    text = re.sub(r'<br\s*/?>', '\n', text)
-    text = re.sub(r'</?(div|p)[^>]*>', '\n', text)
-    text = re.sub(r'<[^>]+>', '', text)
+import re
+import html as html_lib
+
+def strip_html_tags_preserve_formatting(html):
+
+    html = re.sub(r'<style.*?>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<script.*?>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)   
+    html = re.sub(r'</li\s*>', '\n', html, flags=re.IGNORECASE)
+    html = re.sub(r'<li\s*>', '• ', html, flags=re.IGNORECASE)
+    html = re.sub(r'<(ul|ol).*?>', '\n', html, flags=re.IGNORECASE)
+    html = re.sub(r'</(ul|ol)>', '\n', html, flags=re.IGNORECASE)   
+    html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?div.*?>', '\n', html, flags=re.IGNORECASE)  
+    html = re.sub(r'<.*?>', '', html)
+
+    text = html_lib.unescape(html)
     text = re.sub(r'\n{3,}', '\n\n', text)
+
     return text.strip()
+
 
 def extract_media_names(html):
     return re.findall(r'src="([^"]+)"', html) + re.findall(r'\[sound:([^\]]+)\]', html)
@@ -205,27 +216,23 @@ def fetch_cards():
 
         note_map = {n["noteId"]: n for n in notes}
         selected = []
+        model_templates_cache = {}
 
         for c in top_cards:
             nid = c["note"]
             note = note_map.get(nid)
             if not note:
                 continue
+
+            # Get main fields
+            front_val, answer_vals, is_cloze = get_main_fields_for_note(note, model_templates_cache)
+            # Clean up
+            front = strip_html_tags_preserve_formatting(strip_clozes(front_val))
+            back = "\n\n".join(strip_html_tags_preserve_formatting(strip_clozes(ans)) for ans in answer_vals if ans.strip())
+
             flds = note.get("fields", {})
-            raw_front = flds.get("Text", {}).get("value", "")
-            raw_back = flds.get("Extra", {}).get("value", "")
-            front = strip_html_tags_preserve_formatting(strip_clozes(raw_front))
-            back = strip_html_tags_preserve_formatting(strip_clozes(raw_back))
-
             media_sources = set()
-            raw_text = flds.get("Text", {}).get("value", "")
-            raw_extra = flds.get("Extra", {}).get("value", "")
-            media_sources.update(extract_media_names(raw_text))
-            media_sources.update(extract_media_names(raw_extra))
-
-            for fname, field in flds.items():
-                if fname in ("Text", "Extra"):
-                    continue
+            for field in flds.values():
                 val = field.get("value", "")
                 media_sources.update(extract_media_names(val))
 
@@ -235,15 +242,19 @@ def fetch_cards():
                 if not path:
                     continue
                 full_path = os.path.join(MEDIA_DIR, path)
-                try:
-                    from PIL import Image
-                    with Image.open(full_path) as img:
-                        if img.width >= 150 or img.height >= 150:
-                            downloaded.append(path)
-                        else:
-                            print(f"⚠️ Skipping small image: {path} ({img.width}x{img.height})")
-                except Exception as e:
-                    print(f"⚠️ Could not check image: {path} ({e})")
+                ext = os.path.splitext(path)[1].lower()
+                if ext in ('.png', '.jpg', '.jpeg', '.gif'):
+                    try:
+                        from PIL import Image
+                        with Image.open(full_path) as img:
+                            if img.width >= 150 or img.height >= 150:
+                                downloaded.append(path)
+                            else:
+                                print(f"⚠️ Skipping small image: {path} ({img.width}x{img.height})")
+                    except Exception as e:
+                        print(f"⚠️ Could not check image: {path} ({e})")
+                else:
+                    downloaded.append(path)  # Always include non-image files (SVG, audio, etc.)
 
             selected.append({
                 "uid": str(nid),
@@ -259,6 +270,79 @@ def fetch_cards():
         return []
 
 
+def get_main_fields_for_note(note, model_templates_cache):
+    flds = note.get("fields", {})
+    field_values = {k: v.get("value", "") for k, v in flds.items()}
+    model_name = note["modelName"]
+
+    if model_name not in model_templates_cache:
+        templates = requests.post("http://localhost:8765", json={
+            "action": "modelTemplates",
+            "version": 6,
+            "params": {"modelName": model_name}
+        }).json()["result"]
+        if not templates:
+            return "", [], False
+
+        first_template = next(iter(templates.values()))
+        t_front = first_template["Front"]
+        t_back = first_template["Back"]
+
+        cloze_match = re.search(r"{{.*cloze:([\w-]+)\s*}}", t_front, re.IGNORECASE)
+        model_templates_cache[model_name] = {
+            "is_cloze": bool(cloze_match),
+            "cloze_field": cloze_match.group(1) if cloze_match else None,
+            "t_back": t_back,
+        } if cloze_match else {
+            "is_cloze": False,
+            "t_front": t_front,
+            "t_back": t_back,
+        }
+
+    info = model_templates_cache[model_name]
+    if info.get("is_cloze"):
+        cloze_field = info["cloze_field"]
+        t_back = info["t_back"]
+        question = field_values.get(cloze_field, "")
+        # Default: answer is cloze field value, plus any "Extra" field
+        answer = question
+        extra_field = None
+        # Look for a likely "Extra" field by name
+        for k in field_values:
+            if k.lower() == "extra":
+                extra_field = k
+                break
+        if extra_field and field_values[extra_field].strip():
+            answer += "\n\n" + field_values[extra_field]
+        # If after this, answer == question (i.e. no real answer/explanation), add next biggest field
+        if question.strip() == answer.strip():
+            # Exclude the main cloze field from candidates
+            candidates = {k: v for k, v in field_values.items() if k != cloze_field and v.strip()}
+            if candidates:
+                # Find the field with the most non-space characters (i.e., richest field)
+                most_content_field = max(
+                    candidates, key=lambda k: len(candidates[k].replace(' ', '').replace('\n', ''))
+                )
+                # Only append if not already included
+                if candidates[most_content_field] not in answer:
+                    answer += "\n\n" + candidates[most_content_field]
+        return question, [answer], True
+
+
+    else:
+        # Non-cloze: as before (use main front field and all answer fields on back)
+        t_front = info["t_front"]
+        t_back = info["t_back"]
+        field_re = re.compile(r"{{\s*([\w-]+)\s*}}", re.IGNORECASE)
+        front_fields = set(field_re.findall(t_front))
+        back_fields = [f for f in field_re.findall(t_back) if f not in front_fields]
+        q_field = next(iter(front_fields), None)
+        q_val = field_values.get(q_field, "") if q_field else ""
+        a_vals = [field_values.get(f, "") for f in back_fields if field_values.get(f, "")]
+        return q_val, a_vals, False
+
+
+
 def get_cards(force_refresh=False):
     if not force_refresh and os.path.exists(OUTPUT_PATH):
         with open(OUTPUT_PATH, "r") as f:
@@ -270,3 +354,26 @@ def get_cards(force_refresh=False):
         with open(OUTPUT_PATH, "w") as f:
             json.dump(cards, f, indent=2, ensure_ascii=False)
     return cards
+
+
+    # Use cached info
+    info = model_templates_cache[model_name]
+    if info.get("is_cloze"):
+        main = info["cloze_field"]
+        answer_fields = [main]
+        # find a secondary answer (e.g. Extra)
+        field_re = re.compile(r"{{\s*([\w-]+)\s*}}", re.IGNORECASE)
+        back_fields = field_re.findall(info["t_back"])
+        for f in back_fields:
+            if f.lower() != main.lower() and f in flds:
+                answer_fields.append(f)
+                break  # just one extra
+        q_val = flds.get(main, {}).get("value", "")
+        a_vals = [flds.get(f, {}).get("value", "") for f in answer_fields if f in flds]
+        return q_val, a_vals, True
+    else:
+        q_field = info["question_field"]
+        answer_fields = info["answer_fields"]
+        q_val = flds.get(q_field, {}).get("value", "") if q_field else ""
+        a_vals = [flds.get(f, {}).get("value", "") for f in answer_fields if f in flds]
+        return q_val, a_vals, False
