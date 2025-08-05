@@ -1,5 +1,3 @@
-# Cranky — Visual Memory Palace Generator for Anki Cards
-
 Cranky is an application designed for learners who want to deepen their understanding of difficult material by combining two powerful methods: spaced repetition and visual memory palaces.
 
 By integrating directly with your Anki application, Cranky transforms your most challenging cards into symbolic, spatially organized scenes — memory palaces that help you remember not just the answers, but the concepts and thematic relationships behind them.
@@ -8,7 +6,7 @@ Cranky brings together the best of both worlds:
 - The advantages of spaced repetition, provided by Anki
 - The creativity and retention benefits of visual learning, powered by symbolic scene generation
 
-![Scene Screenshot](cranky.png)
+![Scene Screenshot](https://raw.githubusercontent.com/GitCrush/cranky/refs/heads/main/cranky.png)
 
 ---
 
@@ -23,44 +21,39 @@ Whether you're a medical student trying to retain a web of diagnoses and mechani
 
 Therefore it is not meant to be a replacement for your flashcards, but a experience that helps you rember difficult content. 
 
-[Scene Example generated based on the 25 most difficult "Soze Step1" Cardiology Cards](https://api.cranky.app/viewer/5e8e0ced/cranky_viewer.html)
+---
 
-[Another Example generated based on the most difficult Nephrology Cards](https://api.cranky.app/viewer/557d809a/cranky_viewer.html)
+## Features
+
+- Export Anki cards by deck, tag, or learning stats (most lapses/repetitions)
+- OAuth-inspired browser login for secure authentication (no passwords handled in the add-on)
+- Direct export to your Cranky dashboard, with media upload and access to past memory scenes 
+
+![Another scene Screenshot](https://us1.discourse-cdn.com/flex002/uploads/anki2/original/3X/3/7/37923c661aafb6ab37be6a057b5ee4aba5001d67.jpeg)
+---
+
+## Installation
+
+**To install:**
+
+1. Open Anki and go to **Tools → Add-ons → Get Add-ons**.
+2. Enter the add-on code provided for Cranky (or search for "Cranky Memory Palace" in the add-on browser).
+3. Restart Anki.
+
+**The add-on will then appear as “Cranky Memory Palace” in your Tools menu.**
 
 ---
 
-## How to Use
+## Usage
 
-From the command line:
-
-Default mode: request new cards and generate a new layout
-```bash
-python cranky.py
-```
-
-Use cached cards, but generate a new memory palace
-
-```bash
-python cranky.py --stored-cards
-```
-
-Use both cached cards and stored layout from the json file
-
-```bash
-python cranky.py --stored-scene --stored-cards
-```
-
-
-By default, Cranky generates memory palaces based on the 25 most difficult cards of the selected deck. 
-Card creation can take several minutes due to server load and latency of API calls, so please be patient. 
-
-## Prerequisites
-
-- **Anki** installed on your machine
-- **AnkiConnect** add-on installed ([Download AnkiConnect](https://ankiweb.net/shared/info/2055492159))
-- **Python 3.x** installed
-
+1. Select "Cranky Memory Palace" from the Tools menu.
+2. Log in via your browser if prompted. The login page is secure and handled via the official Cranky web app.
+3. You do not need a real email address for registration. The login information is only needed for protected access to your scene dashboard. 
+3. Select your target deck and/or tags in the anki addon, choose your export mode, and follow the prompts to start the workflow.
+4. When your dashboard is ready, your browser will open to show your generated memory palace and media.
+5. Due to LLM API calls and server load, scene creation can take several minutes, so please be patient. - 
 ---
+
 
 ## Important Notice on Data Privacy and Responsibility
 
@@ -72,6 +65,21 @@ The application provider does not operate or control these third-party services 
 
 ---
 
+## Troubleshooting
+
+- If login does not work automatically, use the “Paste Access Token Manually” option and follow the instructions on the login page.
+- If you do not see “Cranky Memory Palace” in the Tools menu after installing, restart Anki.
+- All major Anki versions (2.1.50 and above, including Qt6) are supported. The add-on requires no third-party Python modules.
+- Due to limited server capacity and costs of AI inference, the number of weekly scene generations per user is currently limited to 10 runs. 
+
+---
+
+## Feedback & Issues
+- The application is still under development and there might still be unexpected errors occurring. We are happy about any form of feedback which can help us improving the application. 
+---
+
 *Cranky is designed for learners who want to visualize what they know and understand what they remember.*
 
 contact: deep_intervention@posteo.de
+
+---
