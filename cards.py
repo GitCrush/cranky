@@ -1,13 +1,18 @@
 import json
 import os
 import re
-import requests
+from aqt import mw
 from PyQt6 import QtWidgets
 import sys
 import base64
-from tag_input_widget import TagInputWidget  
+from .tag_input_widget import TagInputWidget  
 import random
 from heapq import nlargest
+import re
+import html as html_lib
+import struct
+import struct
+import os
 
 USE_MOCK_CARDS = False
 
@@ -17,12 +22,11 @@ OUTPUT_PATH = os.path.join(SCRATCHY_DIR, "cards_retrieved.json")
 
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
+print("cards.py loaded")
 
 def strip_clozes(text):
     return re.sub(r'{{c\d+::(.*?)(::.*?)?}}', r'\1', text)
 
-import re
-import html as html_lib
 
 def strip_html_tags_preserve_formatting(html):
 
@@ -52,174 +56,91 @@ def sanitize_filename_base64(filename):
 
 def download_media_file(filename):
     try:
-        response = requests.post("http://localhost:8765", json={
-            "action": "retrieveMediaFile",
-            "version": 6,
-            "params": {"filename": filename}
-        })
-        result = response.json().get("result")
-        if result:
+        media_path = mw.col.media.dir()
+        abs_path = os.path.join(media_path, filename)
+        if os.path.exists(abs_path):
             safe_name = sanitize_filename_base64(filename)
-            path = os.path.join(MEDIA_DIR, safe_name)
-            with open(path, "wb") as f:
-                f.write(base64.b64decode(result))
-            print(f"✅ Downloaded media file: {safe_name}")
+            dest_path = os.path.join(MEDIA_DIR, safe_name)
+            with open(abs_path, "rb") as src, open(dest_path, "wb") as dst:
+                dst.write(src.read())
+            print(f"✅ Copied media file: {safe_name}")
             return safe_name
+
     except Exception as e:
         print(f"⚠️ Could not download media {filename}: {e}")
     return None
 
 
-def fetch_cards():
+def fetch_cards_by_criteria(deck, tags, selection_mode, limit=25):
     try:
-        deck_names = requests.post("http://localhost:8765", json={
-            "action": "deckNames",
-            "version": 6
-        }).json()["result"]
-
-        tags = requests.post("http://localhost:8765", json={
-            "action": "getTags",
-            "version": 6
-        }).json()["result"]
-
-        app = QtWidgets.QApplication(sys.argv)
-        dialog = QtWidgets.QDialog()
-        dialog.setWindowTitle("Select Deck and Tags")
-        dialog.setFixedSize(700, 300)
-
-        layout = QtWidgets.QVBoxLayout(dialog)
-        deck_combo = QtWidgets.QComboBox()
-        deck_combo.addItem("-none-")
-        deck_combo.addItems(deck_names)
-
-        layout.addWidget(QtWidgets.QLabel("Select Deck:"))
-        layout.addWidget(deck_combo)
-
-        layout.addWidget(QtWidgets.QLabel("Select Tags:"))
-        tag_widget = TagInputWidget(tags)
-        layout.addWidget(tag_widget)
-
-        button_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel
-        )
-        layout.addWidget(QtWidgets.QLabel("Select Card Selection Mode:"))
-        mode_combo = QtWidgets.QComboBox()
-        mode_combo.addItems(["Most Lapses", "Most Repetitions", "Random"])
-        layout.addWidget(mode_combo)
-
-        card_count_label = QtWidgets.QLabel("Cards in scope: 0")
-        layout.addWidget(card_count_label)
-
-        layout.addWidget(button_box)
-
-        def update_card_count():
-            selected_tags = tag_widget.get_tags()
-            tag_query = " ".join([f"tag:{tag}" for tag in selected_tags])
-            deck = deck_combo.currentText()
-            selection_mode = mode_combo.currentText()
-
-            if deck == "-none-":
-                query = tag_query
-            elif selection_mode == "Random":
-                query = f'deck:"{deck}" {tag_query}'
-            else:
-                query = f'deck:"{deck}" is:review {tag_query}'
-
-            try:
-                card_ids = requests.post("http://localhost:8765", json={
-                    "action": "findCards",
-                    "version": 6,
-                    "params": {"query": query.strip()}
-                }).json()["result"]
-                card_count_label.setText(f"Cards in scope: {len(card_ids)}")
-            except:
-                card_count_label.setText("Cards in scope: error")
-
-        deck_combo.currentIndexChanged.connect(update_card_count)
-        tag_widget.tagChanged.connect(update_card_count)
-        mode_combo.currentIndexChanged.connect(update_card_count)
-        update_card_count()
-        button_box.accepted.connect(dialog.accept)
-        button_box.rejected.connect(dialog.reject)
-
-        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
-            print("🛑 User cancelled selection. Exiting program.")
-            sys.exit(0)
-
-        deck = deck_combo.currentText()
-        selection_mode = mode_combo.currentText()
-        selected_tags = tag_widget.get_tags()
-
+      
+        # Build query
         query_parts = []
-        if deck != "-none-":
+        if deck and deck != "all" and deck != "-none-":
             query_parts.append(f'deck:"{deck}"')
-        for tag in selected_tags:
+        for tag in tags:
             query_parts.append(f'tag:"{tag}"')
-        if selection_mode != "Random":
-            query_parts.append("is:review")
-
+        # No is:review or is:new for these modes!
         query = " ".join(query_parts)
-        print("🔍 AnkiConnect query:", query)
-
-        card_ids = requests.post("http://localhost:8765", json={
-            "action": "findCards",
-            "version": 6,
-            "params": {"query": query}
-        }).json()["result"]
+        card_ids = mw.col.find_cards(query)
 
         if not card_ids:
-            raise ValueError("No cards found")
+            print("No cards found")
+            return []
 
-        from heapq import nlargest
-        import random
+        def fetch_top_cards(card_ids, key):
+            best_cards_by_note = {}
+            for cid in card_ids:
+                card = mw.col.get_card(cid)
+                note_id = card.nid
+                val = getattr(card, key, 0)
+                if note_id not in best_cards_by_note or val > getattr(best_cards_by_note[note_id], key, 0):
+                    best_cards_by_note[note_id] = card
+            from heapq import nlargest
+            return nlargest(limit, best_cards_by_note.values(), key=lambda c: getattr(c, key, 0))
+
+        if selection_mode == "Random":
+            import random
+            chosen_ids = random.sample(card_ids, min(limit, len(card_ids)))
+            top_cards = [mw.col.get_card(cid) for cid in chosen_ids]
+        elif selection_mode == "Most Repetitions":
+            top_cards = fetch_top_cards(card_ids, "reps")
+        else:  # Most Lapses
+            top_cards = fetch_top_cards(card_ids, "lapses")
+
 
         def fetch_top_cards(card_ids, key):
             best_cards_by_note = {}
             batch_size = 500
-
             for i in range(0, len(card_ids), batch_size):
                 batch = card_ids[i:i + batch_size]
-                response = requests.post("http://localhost:8765", json={
-                    "action": "cardsInfo",
-                    "version": 6,
-                    "params": {"cards": batch}
-                }).json()["result"]
+                for cid in batch:
+                    card = mw.col.get_card(cid)
+                    note_id = card.nid
+                    val = getattr(card, key, 0)
+                    if note_id not in best_cards_by_note or val > getattr(best_cards_by_note[note_id], key, 0):
+                        best_cards_by_note[note_id] = card
+            return nlargest(25, best_cards_by_note.values(), key=lambda c: getattr(c, key, 0))
 
-                for c in response:
-                    note_id = c["note"]
-                    if note_id not in best_cards_by_note or c.get(key, 0) > best_cards_by_note[note_id].get(key, 0):
-                        best_cards_by_note[note_id] = c
-
-            return nlargest(25, best_cards_by_note.values(), key=lambda c: c.get(key, 0))
 
         if selection_mode == "Random":
             random_ids = random.sample(card_ids, min(25, len(card_ids)))
-            card_infos = requests.post("http://localhost:8765", json={
-                "action": "cardsInfo",
-                "version": 6,
-                "params": {"cards": random_ids}
-            }).json()["result"]
-            top_cards = card_infos
-
+            top_cards = [mw.col.get_card(cid) for cid in random_ids]
         elif selection_mode == "Most Repetitions":
             top_cards = fetch_top_cards(card_ids, "reps")
-
         else:  # Most Lapses
             top_cards = fetch_top_cards(card_ids, "lapses")
 
-        note_ids = [c["note"] for c in top_cards]
-        notes = requests.post("http://localhost:8765", json={
-            "action": "notesInfo",
-            "version": 6,
-            "params": {"notes": note_ids}
-        }).json()["result"]
 
-        note_map = {n["noteId"]: n for n in notes}
+        note_ids = [c.nid for c in top_cards]
+        notes = [mw.col.get_note(nid) for nid in note_ids]
+        note_map = {n.id: n for n in notes}
+
         selected = []
         model_templates_cache = {}
 
         for c in top_cards:
-            nid = c["note"]
+            nid = c.nid
             note = note_map.get(nid)
             if not note:
                 continue
@@ -230,10 +151,9 @@ def fetch_cards():
             front = strip_html_tags_preserve_formatting(strip_clozes(front_val))
             back = "\n\n".join(strip_html_tags_preserve_formatting(strip_clozes(ans)) for ans in answer_vals if ans.strip())
 
-            flds = note.get("fields", {})
+            flds = dict(note.items())  # Now {fieldname: value}
             media_sources = set()
-            for field in flds.values():
-                val = field.get("value", "")
+            for val in flds.values():
                 media_sources.update(extract_media_names(val))
 
             downloaded = []
@@ -243,16 +163,11 @@ def fetch_cards():
                     continue
                 full_path = os.path.join(MEDIA_DIR, path)
                 ext = os.path.splitext(path)[1].lower()
-                if ext in ('.png', '.jpg', '.jpeg', '.gif'):
-                    try:
-                        from PIL import Image
-                        with Image.open(full_path) as img:
-                            if img.width >= 150 or img.height >= 150:
-                                downloaded.append(path)
-                            else:
-                                print(f"⚠️ Skipping small image: {path} ({img.width}x{img.height})")
+                if ext in ('.png', '.jpg', '.jpeg', '.gif','.webp'):
+                    try:                  
+                        downloaded.append(path)
                     except Exception as e:
-                        print(f"⚠️ Could not check image: {path} ({e})")
+                        print(f"⚠️ Could not download image: {path} ({e})")
                 else:
                     downloaded.append(path)  # Always include non-image files (SVG, audio, etc.)
 
@@ -263,84 +178,78 @@ def fetch_cards():
                 "images": downloaded
             })
 
+        with open(OUTPUT_PATH, "w") as f:
+            json.dump(selected, f, indent=2, ensure_ascii=False)
         return selected
 
     except Exception as e:
-        print(f"❌ Anki Connect Error: {e}")
         return []
 
 
 def get_main_fields_for_note(note, model_templates_cache):
-    flds = note.get("fields", {})
-    field_values = {k: v.get("value", "") for k, v in flds.items()}
-    model_name = note["modelName"]
+    flds = dict(note.items())
+    model_id = note.mid
+    model = mw.col.models.get(model_id)
+    model_name = model['name']
 
     if model_name not in model_templates_cache:
-        templates = requests.post("http://localhost:8765", json={
-            "action": "modelTemplates",
-            "version": 6,
-            "params": {"modelName": model_name}
-        }).json()["result"]
+        templates = model['tmpls']
         if not templates:
             return "", [], False
-
-        first_template = next(iter(templates.values()))
-        t_front = first_template["Front"]
-        t_back = first_template["Back"]
-
+        first_template = templates[0]
+        t_front = first_template['qfmt']
+        t_back = first_template['afmt']
+        # Detect cloze: look for {{cloze:...}} in front template
         cloze_match = re.search(r"{{.*cloze:([\w-]+)\s*}}", t_front, re.IGNORECASE)
-        model_templates_cache[model_name] = {
-            "is_cloze": bool(cloze_match),
-            "cloze_field": cloze_match.group(1) if cloze_match else None,
-            "t_back": t_back,
-        } if cloze_match else {
-            "is_cloze": False,
-            "t_front": t_front,
-            "t_back": t_back,
-        }
-
+        if cloze_match:
+            model_templates_cache[model_name] = {
+                "is_cloze": True,
+                "cloze_field": cloze_match.group(1),
+                "t_back": t_back,
+            }
+        else:
+            field_re = re.compile(r"{{\s*([\w-]+)\s*}}", re.IGNORECASE)
+            front_fields = set(field_re.findall(t_front))
+            back_fields = [f for f in field_re.findall(t_back) if f not in front_fields]
+            q_field = next(iter(front_fields), None)
+            model_templates_cache[model_name] = {
+                "is_cloze": False,
+                "t_front": t_front,
+                "t_back": t_back,
+                "question_field": q_field,
+                "answer_fields": back_fields,
+            }
     info = model_templates_cache[model_name]
+
     if info.get("is_cloze"):
         cloze_field = info["cloze_field"]
         t_back = info["t_back"]
-        question = field_values.get(cloze_field, "")
-        # Default: answer is cloze field value, plus any "Extra" field
+        question = flds.get(cloze_field, "")
         answer = question
         extra_field = None
-        # Look for a likely "Extra" field by name
-        for k in field_values:
+        for k in flds:
             if k.lower() == "extra":
                 extra_field = k
                 break
-        if extra_field and field_values[extra_field].strip():
-            answer += "\n\n" + field_values[extra_field]
-        # If after this, answer == question (i.e. no real answer/explanation), add next biggest field
+        if extra_field and flds[extra_field].strip():
+            answer += "\n\n" + flds[extra_field]
         if question.strip() == answer.strip():
-            # Exclude the main cloze field from candidates
-            candidates = {k: v for k, v in field_values.items() if k != cloze_field and v.strip()}
+            candidates = {k: v for k, v in flds.items() if k != cloze_field and v.strip()}
             if candidates:
-                # Find the field with the most non-space characters (i.e., richest field)
                 most_content_field = max(
                     candidates, key=lambda k: len(candidates[k].replace(' ', '').replace('\n', ''))
                 )
-                # Only append if not already included
                 if candidates[most_content_field] not in answer:
                     answer += "\n\n" + candidates[most_content_field]
         return question, [answer], True
-
-
     else:
-        # Non-cloze: as before (use main front field and all answer fields on back)
         t_front = info["t_front"]
         t_back = info["t_back"]
-        field_re = re.compile(r"{{\s*([\w-]+)\s*}}", re.IGNORECASE)
-        front_fields = set(field_re.findall(t_front))
-        back_fields = [f for f in field_re.findall(t_back) if f not in front_fields]
-        q_field = next(iter(front_fields), None)
-        q_val = field_values.get(q_field, "") if q_field else ""
-        a_vals = [field_values.get(f, "") for f in back_fields if field_values.get(f, "")]
+        q_field = info.get("question_field")
+        answer_fields = info.get("answer_fields", [])
+        q_val = flds.get(q_field, "") if q_field else ""
+        a_vals = [flds.get(f, "") for f in answer_fields if flds.get(f, "")]
         return q_val, a_vals, False
-
 
 
 def get_cards(force_refresh=False):
